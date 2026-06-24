@@ -11,11 +11,10 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 
-APP_TITLE = "Sterling Label Generator v1.2"
+APP_TITLE = "Sterling Label Generator v1.3"
 FOOTER_TEXT = "Sterling NA, Hauppauge NY"
 SAVED_JOBS_DIR = Path("saved_jobs")
 
-# Avery 5163 / 2" x 4" labels, 10 per letter sheet.
 PAGE_WIDTH, PAGE_HEIGHT = letter
 LABEL_WIDTH = 4.0 * 72
 LABEL_HEIGHT = 2.0 * 72
@@ -126,8 +125,17 @@ def build_mdc_label_lines(gmm, wmn, description, pcs_qty, carton_num, total_cart
     return lines
 
 
-def build_non_mdc_label_lines(destination, description, fold_size, qty_for_box, pack_of_per_full_box,
-                              pieces_per_pack, carton_num, total_cartons, is_partial):
+def build_non_mdc_label_lines(
+    destination,
+    description,
+    fold_size,
+    qty_for_box,
+    pack_type,
+    pieces_per_pack,
+    carton_num,
+    total_cartons,
+    is_partial,
+):
     lines = []
 
     if is_partial:
@@ -139,13 +147,17 @@ def build_non_mdc_label_lines(destination, description, fold_size, qty_for_box, 
             if cleaned:
                 lines.append(cleaned)
 
-    if is_partial:
-        lines.append(f"{qty_for_box:,} QTY")
-        breakdown = partial_pack_breakdown(qty_for_box, pieces_per_pack)
-        if breakdown:
-            lines.append(breakdown)
+    if pack_type == "Bulk Pack":
+        lines.append(f"TOTAL {qty_for_box:,} (BULK PACK)")
     else:
-        lines.append(f"{pack_of_per_full_box:,} PACKS OF {pieces_per_pack:,}")
+        if is_partial:
+            breakdown = partial_pack_breakdown(qty_for_box, pieces_per_pack)
+            if breakdown:
+                lines.append(f"TOTAL {qty_for_box:,} ({breakdown})")
+            else:
+                lines.append(f"TOTAL {qty_for_box:,}")
+        else:
+            lines.append(f"TOTAL {qty_for_box:,} (PACKS OF {pieces_per_pack:,})")
 
     lines.append(FOOTER_TEXT)
     lines.append(f"Carton {carton_num} of {total_cartons}")
@@ -268,8 +280,8 @@ def create_pdf(label_type, job_data, cartons_to_print, start_position):
                 description=job_data["description"],
                 fold_size=job_data["fold_size"],
                 qty_for_box=qty_for_box,
-                pack_of_per_full_box=int(job_data["pack_of_per_full_box"]),
-                pieces_per_pack=int(job_data["pieces_per_pack"]),
+                pack_type=job_data["pack_type"],
+                pieces_per_pack=int(job_data.get("pieces_per_pack", 0) or 0),
                 carton_num=carton_num,
                 total_cartons=total_cartons,
                 is_partial=is_partial,
@@ -319,7 +331,7 @@ def apply_loaded_job(job):
         st.session_state["fold_size"] = job.get("fold_size", "")
         st.session_state["total_qty"] = int(job.get("total_qty", 0) or 0)
         st.session_state["qty_per_full_box"] = int(job.get("qty_per_full_box", 0) or 0)
-        st.session_state["pack_of_per_full_box"] = int(job.get("pack_of_per_full_box", 0) or 0)
+        st.session_state["pack_type"] = job.get("pack_type", "Packs of #")
         st.session_state["pieces_per_pack"] = int(job.get("pieces_per_pack", 0) or 0)
     else:
         st.session_state["gmm"] = job.get("gmm", "")
@@ -403,15 +415,25 @@ with left:
 
         st.subheader("Packing Information")
         col1, col2 = st.columns(2)
+
         with col1:
             total_qty = st.number_input("Total Qty", min_value=0, step=1, key="total_qty")
-            pack_of_per_full_box = st.number_input("Pack Of # Per Full Box", min_value=0, step=1, key="pack_of_per_full_box")
+            pack_type = st.selectbox("Pack Type", ["Packs of #", "Bulk Pack"], key="pack_type")
+
         with col2:
             qty_per_full_box = st.number_input("Qty Per Full Box", min_value=0, step=1, key="qty_per_full_box")
-            pieces_per_pack = st.number_input("Pieces Per Pack", min_value=0, step=1, key="pieces_per_pack")
+
+            if pack_type == "Packs of #":
+                pieces_per_pack = st.number_input("Pieces Per Pack", min_value=0, step=1, key="pieces_per_pack")
+            else:
+                pieces_per_pack = 0
 
         full_boxes, partial_qty, total_cartons = calculate_cartons(int(total_qty), int(qty_per_full_box))
-        partial_breakdown = partial_pack_breakdown(int(partial_qty), int(pieces_per_pack))
+
+        if pack_type == "Packs of #":
+            partial_breakdown = partial_pack_breakdown(int(partial_qty), int(pieces_per_pack))
+        else:
+            partial_breakdown = "Bulk Pack" if partial_qty else "None"
 
         job_data = {
             "label_type": label_type,
@@ -421,7 +443,7 @@ with left:
             "fold_size": fold_size.strip(),
             "total_qty": int(total_qty),
             "qty_per_full_box": int(qty_per_full_box),
-            "pack_of_per_full_box": int(pack_of_per_full_box),
+            "pack_type": pack_type,
             "pieces_per_pack": int(pieces_per_pack),
         }
 
@@ -454,11 +476,12 @@ with right:
     else:
         st.write(f"**Total Qty:** {int(total_qty):,}")
         st.write(f"**Qty Per Full Box:** {int(qty_per_full_box):,}")
-        st.write(f"**Pack Of # Per Full Box:** {int(pack_of_per_full_box):,}")
-        st.write(f"**Pieces Per Pack:** {int(pieces_per_pack):,}")
+        st.write(f"**Pack Type:** {pack_type}")
+        if pack_type == "Packs of #":
+            st.write(f"**Pieces Per Pack:** {int(pieces_per_pack):,}")
         st.write(f"**Full Boxes:** {full_boxes:,}")
         st.write(f"**Partial Qty:** {partial_qty:,}")
-        st.write(f"**Partial Packs:** {partial_breakdown or 'None'}")
+        st.write(f"**Partial Packs:** {partial_breakdown}")
         st.write(f"**Total Boxes Needed:** {total_cartons:,}")
 
     try:
@@ -495,7 +518,7 @@ with right:
                 description=description or "PM-US-GPT-DPB-250001 Blujepa Wallboards- JULY- PIs",
                 fold_size=fold_size or "1/4-FOLD TO 4.1875X5.4375",
                 qty_for_box=preview_qty,
-                pack_of_per_full_box=int(pack_of_per_full_box) if pack_of_per_full_box else 200,
+                pack_type=pack_type,
                 pieces_per_pack=int(pieces_per_pack) if pieces_per_pack else 6,
                 carton_num=preview_carton,
                 total_cartons=total_cartons,
@@ -526,8 +549,10 @@ with save_col:
         else:
             if not job_data["destination"] or not job_data["description"] or not job_data["fold_size"]:
                 st.error("Destination, Description, and Fold / Size are required.")
-            elif job_data["total_qty"] <= 0 or job_data["qty_per_full_box"] <= 0 or job_data["pack_of_per_full_box"] <= 0 or job_data["pieces_per_pack"] <= 0:
-                st.error("All packing fields must be greater than 0.")
+            elif job_data["total_qty"] <= 0 or job_data["qty_per_full_box"] <= 0:
+                st.error("Total Qty and Qty Per Full Box must be greater than 0.")
+            elif job_data["pack_type"] == "Packs of #" and job_data["pieces_per_pack"] <= 0:
+                st.error("Pieces Per Pack must be greater than 0 for Packs of #.")
             else:
                 job_data["saved_at"] = datetime.now().isoformat(timespec="seconds")
                 saved_path = save_job(job_data)
@@ -538,15 +563,27 @@ with pdf_col:
 
     if generate:
         if label_type == "MDC":
-            valid = job_data["gmm"] and job_data["wmn"] and job_data["description"] and job_data["total_pieces"] > 0 and job_data["pieces_per_box"] > 0
+            valid = (
+                job_data["gmm"]
+                and job_data["wmn"]
+                and job_data["description"]
+                and job_data["total_pieces"] > 0
+                and job_data["pieces_per_box"] > 0
+            )
             error_msg = "GMM#, WMN#, Description, Total Pieces, and Pieces Per Box are required."
         else:
             valid = (
-                job_data["destination"] and job_data["description"] and job_data["fold_size"]
-                and job_data["total_qty"] > 0 and job_data["qty_per_full_box"] > 0
-                and job_data["pack_of_per_full_box"] > 0 and job_data["pieces_per_pack"] > 0
+                job_data["destination"]
+                and job_data["description"]
+                and job_data["fold_size"]
+                and job_data["total_qty"] > 0
+                and job_data["qty_per_full_box"] > 0
             )
-            error_msg = "Destination, Description, Fold / Size, and all packing fields are required."
+
+            if job_data["pack_type"] == "Packs of #":
+                valid = valid and job_data["pieces_per_pack"] > 0
+
+            error_msg = "Destination, Description, Fold / Size, Total Qty, Qty Per Full Box, and Pack Type are required."
 
         if not valid:
             st.error(error_msg)
