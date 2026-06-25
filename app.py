@@ -11,7 +11,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 
-APP_TITLE = "Sterling Label Generator v1.3.2"
+APP_TITLE = "Sterling Label Generator v1.3.3"
 FOOTER_TEXT = "Sterling NA, Hauppauge NY"
 SAVED_JOBS_DIR = Path("saved_jobs")
 
@@ -161,14 +161,13 @@ def build_non_mdc_label_lines(
             lines.append(cleaned.upper())
 
     for item in [description, fold_size]:
-        if pack_type == "Packs of #":
-            lines.append(
-                f"{pack_method} IN PACKS OF {pieces_per_pack:,}"
-            )
         for line in str(item).splitlines():
             cleaned = line.strip()
             if cleaned:
                 lines.append(cleaned)
+
+    if pack_type == "Packs of #":
+        lines.append(f"{pack_method} IN PACKS OF {pieces_per_pack:,}")
 
     if pack_type == "Bulk Pack":
         lines.append(f"TOTAL {qty_for_box:,} (BULK PACK)")
@@ -365,10 +364,7 @@ def apply_loaded_job(job):
         st.session_state["total_qty"] = int(job.get("total_qty", 0) or 0)
         st.session_state["qty_per_full_box"] = int(job.get("qty_per_full_box", 0) or 0)
         st.session_state["pack_type"] = job.get("pack_type", "Packs of #")
-        st.session_state["pack_method"] = job.get(
-    "pack_method",
-    "SW"
-)
+        st.session_state["pack_method"] = job.get("pack_method", "SW")
         st.session_state["pieces_per_pack"] = int(job.get("pieces_per_pack", 0) or 0)
     else:
         st.session_state["gmm"] = job.get("gmm", "")
@@ -456,19 +452,19 @@ with left:
         with col1:
             total_qty = st.number_input("Total Qty", min_value=0, step=1, key="total_qty")
             pack_type = st.selectbox(
-    "Pack Type",
-    ["Packs of #", "Bulk Pack"],
-    key="pack_type"
-)
+                "Pack Type",
+                ["Packs of #", "Bulk Pack"],
+                key="pack_type"
+            )
 
-if pack_type == "Packs of #":
-    pack_method = st.selectbox(
-        "Pack Method",
-        ["SW", "RB"],
-        key="pack_method"
-    )
-else:
-    pack_method = ""
+            if pack_type == "Packs of #":
+                pack_method = st.selectbox(
+                    "Pack Method",
+                    ["SW", "RB"],
+                    key="pack_method"
+                )
+            else:
+                pack_method = ""
 
         with col2:
             qty_per_full_box = st.number_input("Qty Per Full Box", min_value=0, step=1, key="qty_per_full_box")
@@ -529,6 +525,7 @@ with right:
         st.write(f"**Qty Per Full Box:** {int(qty_per_full_box):,}")
         st.write(f"**Pack Type:** {pack_type}")
         if pack_type == "Packs of #":
+            st.write(f"**Pack Method:** {pack_method}")
             st.write(f"**Pieces Per Pack:** {int(pieces_per_pack):,}")
         st.write(f"**Full Boxes:** {full_boxes:,}")
         st.write(f"**Partial Qty:** {partial_qty:,}")
@@ -570,6 +567,7 @@ with right:
                 fold_size=fold_size or "1/4-FOLD TO 4.1875X5.4375",
                 qty_for_box=preview_qty,
                 pack_type=pack_type,
+                pack_method=pack_method,
                 pieces_per_pack=int(pieces_per_pack) if pieces_per_pack else 6,
                 carton_num=preview_carton,
                 total_cartons=total_cartons,
