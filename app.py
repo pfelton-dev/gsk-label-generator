@@ -11,7 +11,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 
-APP_TITLE = "Sterling Label Generator v1.3.1"
+APP_TITLE = "Sterling Label Generator v1.3.2"
 FOOTER_TEXT = "Sterling NA, Hauppauge NY"
 SAVED_JOBS_DIR = Path("saved_jobs")
 
@@ -30,7 +30,9 @@ MIN_FONT_SIZE = 7
 
 def clean_filename(value: str) -> str:
     value = value.strip() or "saved_job"
-    return re.sub(r"[^A-Za-z0-9_-]+", "_", value)[:80]
+    value = re.sub(r'[<>:"/\\|?*]+', "", value)
+    value = re.sub(r"\s+", " ", value)
+    return value[:120].strip(" .")
 
 
 def calculate_cartons(total_qty: int, qty_per_full_box: int):
@@ -57,6 +59,17 @@ def partial_pack_breakdown(partial_qty: int, pieces_per_pack: int):
         parts.append(f"1 PACK OF {leftover}")
 
     return " + ".join(parts)
+
+
+def get_job_file_base_name(job):
+    if job["label_type"] == "Non-MDC":
+        return clean_filename(
+            f"{job['job_number']} LABEL - {job['destination'].upper()} {job['total_qty']:,}"
+        )
+
+    return clean_filename(
+        f"{job['job_number']} LABEL - MDC {job['total_pieces']:,}"
+    )
 
 
 def wrap_line(text, max_width, font_name, font_size):
@@ -310,14 +323,13 @@ def create_pdf(label_type, job_data, cartons_to_print, start_position):
 
 def save_job(job):
     SAVED_JOBS_DIR.mkdir(exist_ok=True)
-    filename_base = clean_filename(
-        f"{job.get('label_type', '')}_{job.get('job_number') or job.get('description', 'saved_job')}"
-    )
-    path = SAVED_JOBS_DIR / f"{filename_base}.json"
+
+    filename = get_job_file_base_name(job)
+    path = SAVED_JOBS_DIR / f"{filename}.json"
 
     if path.exists():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        path = SAVED_JOBS_DIR / f"{filename_base}_{timestamp}.json"
+        path = SAVED_JOBS_DIR / f"{filename}_{timestamp}.json"
 
     path.write_text(json.dumps(job, indent=2), encoding="utf-8")
     return path
@@ -612,11 +624,12 @@ with pdf_col:
                 start_position=int(start_position),
             )
 
-            default_name = clean_filename(job_number or "labels")
+            pdf_name = get_job_file_base_name(job_data)
+
             st.download_button(
                 label="Download Label PDF",
                 data=pdf_bytes,
-                file_name=f"{default_name}_{clean_filename(label_type)}_labels.pdf",
+                file_name=f"{pdf_name}.pdf",
                 mime="application/pdf",
             )
 
