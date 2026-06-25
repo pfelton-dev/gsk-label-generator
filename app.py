@@ -141,11 +141,24 @@ def build_non_mdc_label_lines(
     if is_partial:
         lines.append("_____ PARTIAL _____")
 
-    for item in [destination, description, fold_size]:
-        for line in str(item).splitlines():
-            cleaned = line.strip()
-            if cleaned:
-                lines.append(cleaned)
+
+# Destination (Bold + ALL CAPS)
+for line in str(destination).splitlines():
+    cleaned = line.strip()
+    if cleaned:
+        lines.append(("bold", cleaned.upper()))
+
+# Description
+for line in str(description).splitlines():
+    cleaned = line.strip()
+    if cleaned:
+        lines.append(("normal", cleaned))
+
+# Fold / Size
+for line in str(fold_size).splitlines():
+    cleaned = line.strip()
+    if cleaned:
+        lines.append(("normal", cleaned))
 
     if pack_type == "Bulk Pack":
         lines.append(f"TOTAL {qty_for_box:,} (BULK PACK)")
@@ -232,8 +245,20 @@ def draw_label(c, x, y, lines):
     start_y = y + (LABEL_HEIGHT + total_text_height) / 2 - line_height
 
     for i, line in enumerate(fitted_lines):
-        text_y = start_y - i * line_height
-        text_x = x + LABEL_WIDTH / 2
+    text_y = start_y - i * line_height
+    text_x = x + LABEL_WIDTH / 2
+
+    if isinstance(line, tuple):
+        style, text = line
+
+        if style == "bold":
+            c.setFont("Helvetica-Bold", font_size)
+        else:
+            c.setFont("Helvetica", font_size)
+
+        c.drawCentredString(text_x, text_y, text)
+    else:
+        c.setFont("Helvetica", font_size)
         c.drawCentredString(text_x, text_y, line)
 
 
