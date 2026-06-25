@@ -144,6 +144,7 @@ def build_non_mdc_label_lines(
     fold_size,
     qty_for_box,
     pack_type,
+    pack_method,
     pieces_per_pack,
     carton_num,
     total_cartons,
@@ -160,6 +161,10 @@ def build_non_mdc_label_lines(
             lines.append(cleaned.upper())
 
     for item in [description, fold_size]:
+        if pack_type == "Packs of #":
+    lines.append(
+        f"{pack_method} IN PACKS OF {pieces_per_pack:,}"
+    )
         for line in str(item).splitlines():
             cleaned = line.strip()
             if cleaned:
@@ -307,6 +312,7 @@ def create_pdf(label_type, job_data, cartons_to_print, start_position):
                 fold_size=job_data["fold_size"],
                 qty_for_box=qty_for_box,
                 pack_type=job_data["pack_type"],
+                pack_method=job_data.get("pack_method", ""),
                 pieces_per_pack=int(job_data.get("pieces_per_pack", 0) or 0),
                 carton_num=carton_num,
                 total_cartons=total_cartons,
@@ -359,6 +365,10 @@ def apply_loaded_job(job):
         st.session_state["total_qty"] = int(job.get("total_qty", 0) or 0)
         st.session_state["qty_per_full_box"] = int(job.get("qty_per_full_box", 0) or 0)
         st.session_state["pack_type"] = job.get("pack_type", "Packs of #")
+        st.session_state["pack_method"] = job.get(
+    "pack_method",
+    "SW"
+)
         st.session_state["pieces_per_pack"] = int(job.get("pieces_per_pack", 0) or 0)
     else:
         st.session_state["gmm"] = job.get("gmm", "")
@@ -445,7 +455,20 @@ with left:
 
         with col1:
             total_qty = st.number_input("Total Qty", min_value=0, step=1, key="total_qty")
-            pack_type = st.selectbox("Pack Type", ["Packs of #", "Bulk Pack"], key="pack_type")
+            pack_type = st.selectbox(
+    "Pack Type",
+    ["Packs of #", "Bulk Pack"],
+    key="pack_type"
+)
+
+if pack_type == "Packs of #":
+    pack_method = st.selectbox(
+        "Pack Method",
+        ["SW", "RB"],
+        key="pack_method"
+    )
+else:
+    pack_method = ""
 
         with col2:
             qty_per_full_box = st.number_input("Qty Per Full Box", min_value=0, step=1, key="qty_per_full_box")
@@ -471,6 +494,7 @@ with left:
             "total_qty": int(total_qty),
             "qty_per_full_box": int(qty_per_full_box),
             "pack_type": pack_type,
+            "pack_method": pack_method,
             "pieces_per_pack": int(pieces_per_pack),
         }
 
