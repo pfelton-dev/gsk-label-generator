@@ -162,9 +162,9 @@ def build_non_mdc_label_lines(
 
     for item in [description, fold_size]:
         if pack_type == "Packs of #":
-    lines.append(
-        f"{pack_method} IN PACKS OF {pieces_per_pack:,}"
-    )
+            lines.append(
+                f"{pack_method} IN PACKS OF {pieces_per_pack:,}"
+            )
         for line in str(item).splitlines():
             cleaned = line.strip()
             if cleaned:
