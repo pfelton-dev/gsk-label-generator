@@ -11,7 +11,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfbase.pdfmetrics import stringWidth
 
 
-APP_TITLE = "Sterling Label Generator v1.3"
+APP_TITLE = "Sterling Label Generator v1.3.1"
 FOOTER_TEXT = "Sterling NA, Hauppauge NY"
 SAVED_JOBS_DIR = Path("saved_jobs")
 
@@ -141,24 +141,16 @@ def build_non_mdc_label_lines(
     if is_partial:
         lines.append("_____ PARTIAL _____")
 
+    for line in str(destination).splitlines():
+        cleaned = line.strip()
+        if cleaned:
+            lines.append(cleaned.upper())
 
-# Destination (Bold + ALL CAPS)
-for line in str(destination).splitlines():
-    cleaned = line.strip()
-    if cleaned:
-        lines.append(("bold", cleaned.upper()))
-
-# Description
-for line in str(description).splitlines():
-    cleaned = line.strip()
-    if cleaned:
-        lines.append(("normal", cleaned))
-
-# Fold / Size
-for line in str(fold_size).splitlines():
-    cleaned = line.strip()
-    if cleaned:
-        lines.append(("normal", cleaned))
+    for item in [description, fold_size]:
+        for line in str(item).splitlines():
+            cleaned = line.strip()
+            if cleaned:
+                lines.append(cleaned)
 
     if pack_type == "Bulk Pack":
         lines.append(f"TOTAL {qty_for_box:,} (BULK PACK)")
@@ -237,28 +229,24 @@ def draw_label(c, x, y, lines):
     max_text_width = LABEL_WIDTH - 2 * padding_x
     max_text_height = LABEL_HEIGHT - 2 * padding_y
 
-    fitted_lines, font_size, line_height = fit_label_lines(lines, max_text_width, max_text_height)
-
-    c.setFont(DEFAULT_FONT, font_size)
+    fitted_lines, font_size, line_height = fit_label_lines(
+        lines,
+        max_text_width,
+        max_text_height
+    )
 
     total_text_height = len(fitted_lines) * line_height
     start_y = y + (LABEL_HEIGHT + total_text_height) / 2 - line_height
 
     for i, line in enumerate(fitted_lines):
-    text_y = start_y - i * line_height
-    text_x = x + LABEL_WIDTH / 2
+        text_y = start_y - i * line_height
+        text_x = x + LABEL_WIDTH / 2
 
-    if isinstance(line, tuple):
-        style, text = line
-
-        if style == "bold":
+        if i == 0 or line == "_____ PARTIAL _____":
             c.setFont("Helvetica-Bold", font_size)
         else:
             c.setFont("Helvetica", font_size)
 
-        c.drawCentredString(text_x, text_y, text)
-    else:
-        c.setFont("Helvetica", font_size)
         c.drawCentredString(text_x, text_y, line)
 
 
@@ -322,7 +310,9 @@ def create_pdf(label_type, job_data, cartons_to_print, start_position):
 
 def save_job(job):
     SAVED_JOBS_DIR.mkdir(exist_ok=True)
-    filename_base = clean_filename(f"{job.get('label_type', '')}_{job.get('job_number') or job.get('description', 'saved_job')}")
+    filename_base = clean_filename(
+        f"{job.get('label_type', '')}_{job.get('job_number') or job.get('description', 'saved_job')}"
+    )
     path = SAVED_JOBS_DIR / f"{filename_base}.json"
 
     if path.exists():
